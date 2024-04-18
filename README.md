@@ -10,7 +10,7 @@ The CloudFormation Resource Provider Development Kit (RPDK) allows you to author
 
 This plugin library helps to provide runtime bindings for the execution of your providers by CloudFormation.
 
-[![Build Status](https://travis-ci.com/aws-cloudformation/cloudformation-cli-python-plugin.svg?branch=master)](https://travis-ci.com/aws-cloudformation/cloudformation-cli-python-plugin)
+[![Build Status](https://travis-ci.com/aws-cloudformation/cloudformation-cli-python-plugin.svg?branch=main)](https://travis-ci.com/aws-cloudformation/cloudformation-cli-python-plugin)
 
 ## Community
 
@@ -84,7 +84,7 @@ For changes to the plugin, a Python virtual environment is recommended. The deve
 python3 -m venv env
 source env/bin/activate
 pip install -e . -e src/ \
-  -r https://raw.githubusercontent.com/aws-cloudformation/aws-cloudformation-rpdk/master/requirements.txt
+  -r https://raw.githubusercontent.com/aws-cloudformation/cloudformation-cli/master/requirements.txt
 pre-commit install
 ```
 
