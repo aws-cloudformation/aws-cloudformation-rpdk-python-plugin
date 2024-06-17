@@ -40,6 +40,7 @@ setup(
     install_requires=[
         "cloudformation-cli>=0.2.26",
         "types-dataclasses>=0.1.5",
+        "setuptools",
     ],
     entry_points={
         "rpdk.v1.languages": [
