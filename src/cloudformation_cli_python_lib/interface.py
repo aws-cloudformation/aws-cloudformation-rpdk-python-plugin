@@ -46,6 +46,7 @@ class OperationStatus(str, _AutoName):
     PENDING = auto()
     IN_PROGRESS = auto()
     SUCCESS = auto()
+    CHANGE_SET_SUCCESS_SKIP_STACK_HOOK = auto()
     FAILED = auto()
 
 
@@ -53,6 +54,7 @@ class HookStatus(str, _AutoName):
     PENDING = auto()
     IN_PROGRESS = auto()
     SUCCESS = auto()
+    CHANGE_SET_SUCCESS_SKIP_STACK_HOOK = auto()
     FAILED = auto()
 
 

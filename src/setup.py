@@ -3,7 +3,7 @@ from setuptools import setup
 
 setup(
     name="cloudformation-cli-python-lib",
-    version="2.1.18",
+    version="2.1.19",
     description=__doc__,
     author="Amazon Web Services",
     author_email="aws-cloudformation-developers@amazon.com",
@@ -15,6 +15,9 @@ setup(
     python_requires=">=3.8",
     install_requires=[
         "boto3>=1.34.6",
+        'dataclasses;python_version<"3.7"',
+        "requests>=2.22",
+        "setuptools",
     ],
     license="Apache License 2.0",
     classifiers=[

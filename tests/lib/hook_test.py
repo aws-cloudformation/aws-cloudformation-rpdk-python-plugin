@@ -14,10 +14,15 @@ from cloudformation_cli_python_lib.interface import (
     OperationStatus,
     ProgressEvent,
 )
-from cloudformation_cli_python_lib.utils import Credentials, HookInvocationRequest
+from cloudformation_cli_python_lib.utils import (
+    Credentials,
+    HookInvocationRequest,
+    HookRequestData,
+)
 
 import json
 from datetime import datetime
+from typing import Any, Mapping
 from unittest.mock import Mock, call, patch, sentinel
 
 ENTRYPOINT_PAYLOAD = {
@@ -44,6 +49,34 @@ ENTRYPOINT_PAYLOAD = {
             "resourceProperties": sentinel.resource_properties,
             "previousResourceProperties": sentinel.previous_resource_properties,
         },
+    },
+    "stackId": "arn:aws:cloudformation:us-east-1:123456789012:stack/SampleStack/e"
+    "722ae60-fe62-11e8-9a0e-0ae8cc519968",
+    "hookModel": sentinel.type_configuration,
+}
+
+STACK_LEVEL_HOOK_ENTRYPOINT_PAYLOAD = {
+    "awsAccountId": "123456789012",
+    "clientRequestToken": "4b90a7e4-b790-456b-a937-0cfdfa211dfe",
+    "region": "us-east-1",
+    "actionInvocationPoint": "CREATE_PRE_PROVISION",
+    "hookTypeName": "AWS::Test::TestHook",
+    "hookTypeVersion": "1.0",
+    "requestContext": {
+        "invocation": 1,
+        "callbackContext": {},
+    },
+    "requestData": {
+        "callerCredentials": '{"accessKeyId": "IASAYK835GAIFHAHEI23", "secretAccessKey": "66iOGPN5LnpZorcLr8Kh25u8AbjHVllv5poh2O0", "sessionToken": "lameHS2vQOknSHWhdFYTxm2eJc1JMn9YBNI4nV4mXue945KPL6DHfW8EsUQT5zwssYEC1NvYP9yD6Y5s5lKR3chflOHPFsIe6eqg"}',  # noqa: B950
+        "providerCredentials": '{"accessKeyId": "HDI0745692Y45IUTYR78", "secretAccessKey": "4976TUYVI2345GW87ERYG823RF87GY9EIUH452I3", "sessionToken": "842HYOFIQAEUDF78R8T7IU43HSADYGIFHBJSDHFA87SDF9PYvN1CEYASDUYFT5TQ97YASIHUDFAIUEYRISDKJHFAYSUDTFSDFADS"}',  # noqa: B950
+        "providerLogGroupName": "providerLoggingGroupName",
+        "targetName": "STACK",
+        "targetType": "STACK",
+        "targetLogicalId": "myStack",
+        "hookEncryptionKeyArn": None,
+        "hookEncryptionKeyRole": None,
+        "payload": "https://someS3PresignedURL",
+        "targetModel": {},
     },
     "stackId": "arn:aws:cloudformation:us-east-1:123456789012:stack/SampleStack/e"
     "722ae60-fe62-11e8-9a0e-0ae8cc519968",
@@ -452,7 +485,78 @@ def test_test_entrypoint_success():
         (OperationStatus.IN_PROGRESS, HookStatus.IN_PROGRESS),
         (OperationStatus.SUCCESS, HookStatus.SUCCESS),
         (OperationStatus.FAILED, HookStatus.FAILED),
+        (
+            OperationStatus.CHANGE_SET_SUCCESS_SKIP_STACK_HOOK,
+            HookStatus.CHANGE_SET_SUCCESS_SKIP_STACK_HOOK,
+        ),
     ],
 )
 def test_get_hook_status(operation_status, hook_status):
     assert hook_status == Hook._get_hook_status(operation_status)
+
+
+def test__hook_request_data_remote_payload():
+    non_remote_input = HookRequestData(
+        targetName="someTargetName",
+        targetType="someTargetModel",
+        targetLogicalId="someTargetLogicalId",
+        targetModel={"resourceProperties": {"propKeyA": "propValueA"}},
+    )
+    assert non_remote_input.is_hook_invocation_payload_remote() is False
+
+    non_remote_input_1 = HookRequestData(
+        targetName="someTargetName",
+        targetType="someTargetModel",
+        targetLogicalId="someTargetLogicalId",
+        targetModel={"resourceProperties": {"propKeyA": "propValueA"}},
+        payload="https://someUrl",
+    )
+    assert non_remote_input_1.is_hook_invocation_payload_remote() is False
+
+    remote_input = HookRequestData(
+        targetName="someTargetName",
+        targetType="someTargetModel",
+        targetLogicalId="someTargetLogicalId",
+        targetModel={},
+        payload="https://someUrl",
+    )
+    assert remote_input.is_hook_invocation_payload_remote() is True
+
+
+def test__test_stack_level_hook_input(hook):
+    hook = Hook(TYPE_NAME, Mock())
+
+    with patch(
+        "cloudformation_cli_python_lib.utils.requests.Session.get"
+    ) as mock_requests_lib:
+        mock_requests_lib.return_value = MockResponse(200, {"foo": "bar"})
+        _, _, _, req = hook._parse_request(STACK_LEVEL_HOOK_ENTRYPOINT_PAYLOAD)
+
+    assert req.requestData.targetName == "STACK"
+    assert req.requestData.targetType == "STACK"
+    assert req.requestData.targetLogicalId == "myStack"
+    assert req.requestData.targetModel == {"foo": "bar"}
+
+
+def test__test_stack_level_hook_input_failed_s3_download(hook):
+    hook = Hook(TYPE_NAME, Mock())
+
+    with patch(
+        "cloudformation_cli_python_lib.utils.requests.Session.get"
+    ) as mock_requests_lib:
+        mock_requests_lib.return_value = MockResponse(404, {"foo": "bar"})
+        _, _, _, req = hook._parse_request(STACK_LEVEL_HOOK_ENTRYPOINT_PAYLOAD)
+
+    assert req.requestData.targetName == "STACK"
+    assert req.requestData.targetType == "STACK"
+    assert req.requestData.targetLogicalId == "myStack"
+    assert req.requestData.targetModel == {}
+
+
+@dataclass
+class MockResponse:
+    status_code: int
+    _json: Mapping[str, Any]
+
+    def json(self) -> Mapping[str, Any]:
+        return self._json

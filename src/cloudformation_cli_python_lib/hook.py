@@ -293,6 +293,8 @@ class Hook:
             hook_status = HookStatus.IN_PROGRESS
         elif operation_status == OperationStatus.SUCCESS:
             hook_status = HookStatus.SUCCESS
+        elif operation_status == OperationStatus.CHANGE_SET_SUCCESS_SKIP_STACK_HOOK:
+            hook_status = HookStatus.CHANGE_SET_SUCCESS_SKIP_STACK_HOOK
         else:
             hook_status = HookStatus.FAILED
         return hook_status

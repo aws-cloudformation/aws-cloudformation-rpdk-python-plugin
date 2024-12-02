@@ -2,7 +2,9 @@
 from dataclasses import dataclass, field, fields
 
 import json
+import requests  # type: ignore
 from datetime import date, datetime, time
+from requests.adapters import HTTPAdapter  # type: ignore
 from typing import (
     Any,
     Callable,
@@ -14,6 +16,7 @@ from typing import (
     Type,
     Union,
 )
+from urllib3 import Retry  # type: ignore
 
 from .exceptions import InvalidRequest
 from .interface import (
@@ -24,6 +27,12 @@ from .interface import (
     HookContext,
     HookInvocationPoint,
 )
+
+HOOK_REQUEST_DATA_TARGET_MODEL_FIELD_NAME = "targetModel"
+HOOK_REMOTE_PAYLOAD_CONNECT_AND_READ_TIMEOUT_SECONDS = 10
+HOOK_REMOTE_PAYLOAD_RETRY_LIMIT = 3
+HOOK_REMOTE_PAYLOAD_RETRY_BACKOFF_FACTOR = 1
+HOOK_REMOTE_PAYLOAD_RETRY_STATUSES = [500, 502, 503, 504]
 
 
 class KitchenSinkEncoder(json.JSONEncoder):
@@ -213,7 +222,8 @@ class HookRequestData:
     targetName: str
     targetType: str
     targetLogicalId: str
-    targetModel: Mapping[str, Any]
+    targetModel: Optional[Mapping[str, Any]] = None
+    payload: Optional[str] = None
     callerCredentials: Optional[Credentials] = None
     providerCredentials: Optional[Credentials] = None
     providerLogGroupName: Optional[str] = None
@@ -234,6 +244,30 @@ class HookRequestData:
             if creds:
                 cred_data = json.loads(creds)
                 setattr(req_data, key, Credentials(**cred_data))
+
+        if req_data.is_hook_invocation_payload_remote():
+            with requests.Session() as s:
+                retries = Retry(
+                    total=HOOK_REMOTE_PAYLOAD_RETRY_LIMIT,
+                    backoff_factor=HOOK_REMOTE_PAYLOAD_RETRY_BACKOFF_FACTOR,
+                    status_forcelist=HOOK_REMOTE_PAYLOAD_RETRY_STATUSES,
+                )
+
+                s.mount("http://", HTTPAdapter(max_retries=retries))
+                s.mount("https://", HTTPAdapter(max_retries=retries))
+
+                response = s.get(
+                    req_data.payload,
+                    timeout=HOOK_REMOTE_PAYLOAD_CONNECT_AND_READ_TIMEOUT_SECONDS,
+                )
+
+                if response.status_code == 200:
+                    setattr(
+                        req_data,
+                        HOOK_REQUEST_DATA_TARGET_MODEL_FIELD_NAME,
+                        response.json(),
+                    )
+
         return req_data
 
     def serialize(self) -> Mapping[str, Any]:
@@ -246,6 +280,14 @@ class HookRequestData:
             for key, value in self.__dict__.items()
             if value is not None
         }
+
+    def is_hook_invocation_payload_remote(self) -> bool:
+        if (
+            not self.targetModel and self.payload
+        ):  # pylint: disable=simplifiable-if-statement
+            return True
+
+        return False
 
 
 @dataclass
